@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-coffee-bean-tracker",
+  "name": "Coffee Bean Tracker",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "咖啡豆库存管理：看板视图、多维表格、一键扣减、消费记录、评分系统",
+  "author": "gabi",
+  "isDesktopOnly": false
+}
