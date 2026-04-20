@@ -19,16 +19,201 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/utils/beanImage.ts
+function sanitizeFileNamePart(value) {
+  const cleaned = value.trim().replace(/[\\/:*?"<>|#^\[\]]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return cleaned || "coffee-bean";
+}
+function getImageExtension(mimeType) {
+  switch (mimeType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/heic":
+      return "heic";
+    case "image/heif":
+      return "heif";
+    default:
+      return "png";
+  }
+}
+async function ensureFolder(app, folderPath) {
+  const normalizedFolder = (0, import_obsidian.normalizePath)(folderPath);
+  const parts = normalizedFolder.split("/");
+  let currentPath = "";
+  for (const part of parts) {
+    currentPath = currentPath ? `${currentPath}/${part}` : part;
+    const existing = app.vault.getAbstractFileByPath(currentPath);
+    if (!existing) {
+      await app.vault.createFolder(currentPath);
+    }
+  }
+}
+async function saveImageBlobToVault(app, blob, preferredName) {
+  await ensureFolder(app, IMAGE_FOLDER);
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  const randomSuffix = Math.random().toString(36).slice(2, 7);
+  const safeName = sanitizeFileNamePart(preferredName || "");
+  const extension = getImageExtension(blob.type);
+  const filePath = (0, import_obsidian.normalizePath)(
+    `${IMAGE_FOLDER}/${safeName}-${timestamp}-${randomSuffix}.${extension}`
+  );
+  const buffer = await blob.arrayBuffer();
+  await app.vault.createBinary(filePath, buffer);
+  return filePath;
+}
+function resolveImageSrc(app, imagePath) {
+  if (!imagePath) return "";
+  if (/^https?:\/\//i.test(imagePath)) {
+    return imagePath;
+  }
+  return app.vault.adapter.getResourcePath((0, import_obsidian.normalizePath)(imagePath));
+}
+async function extractImageFromClipboard(evt) {
+  var _a;
+  const items = Array.from(((_a = evt.clipboardData) == null ? void 0 : _a.items) || []);
+  const imageItem = items.find((item) => item.type.startsWith("image/"));
+  return (imageItem == null ? void 0 : imageItem.getAsFile()) || null;
+}
+function renderBeanImageField(options) {
+  const { containerEl, app, onChange, getSuggestedName } = options;
+  let currentValue = options.value || "";
+  let pathInput = null;
+  const imageSetting = new import_obsidian.Setting(containerEl).setName("\u56FE\u7247").setDesc("\u652F\u6301\u624B\u586B\u8DEF\u5F84\uFF0C\u4E5F\u652F\u6301\u5728\u4E0B\u65B9\u533A\u57DF\u70B9\u51FB\u540E\u76F4\u63A5\u7C98\u8D34\u526A\u8D34\u677F\u56FE\u7247");
+  imageSetting.addText((text) => {
+    pathInput = text;
+    text.setPlaceholder("vault \u8DEF\u5F84\u6216 URL");
+    text.setValue(currentValue);
+    text.onChange((value) => {
+      currentValue = value.trim();
+      onChange(currentValue);
+      renderPreview();
+      updateButtons();
+    });
+    text.inputEl.addEventListener("paste", async (evt) => {
+      const imageFile = await extractImageFromClipboard(evt);
+      if (!imageFile) return;
+      evt.preventDefault();
+      await saveClipboardImage(imageFile);
+    });
+  });
+  const imageField = containerEl.createDiv({ cls: "coffee-tracker-image-field" });
+  const preview = imageField.createDiv({ cls: "coffee-tracker-image-preview" });
+  const pasteZone = imageField.createDiv({
+    cls: "coffee-tracker-image-paste-zone",
+    text: "\u70B9\u51FB\u8FD9\u91CC\u540E\u6309 Cmd/Ctrl + V \u7C98\u8D34\u56FE\u7247"
+  });
+  pasteZone.tabIndex = 0;
+  const buttonRow = imageField.createDiv({ cls: "coffee-tracker-image-actions" });
+  const focusBtn = buttonRow.createEl("button", {
+    cls: "coffee-tracker-btn",
+    text: "\u51C6\u5907\u7C98\u8D34"
+  });
+  const clearBtn = buttonRow.createEl("button", {
+    cls: "coffee-tracker-btn",
+    text: "\u6E05\u7A7A\u56FE\u7247"
+  });
+  const updateValue = (value) => {
+    currentValue = value.trim();
+    onChange(currentValue);
+    if (pathInput && pathInput.getValue() !== currentValue) {
+      pathInput.setValue(currentValue);
+    }
+    renderPreview();
+    updateButtons();
+  };
+  const updateButtons = () => {
+    clearBtn.disabled = !currentValue;
+  };
+  const renderPreview = () => {
+    preview.empty();
+    if (!currentValue) {
+      preview.addClass("is-empty");
+      preview.createDiv({
+        cls: "coffee-tracker-image-placeholder",
+        text: "\u8FD8\u6CA1\u6709\u56FE\u7247"
+      });
+      return;
+    }
+    preview.removeClass("is-empty");
+    const img = preview.createEl("img", {
+      cls: "coffee-tracker-image-preview-img"
+    });
+    img.src = resolveImageSrc(app, currentValue);
+    img.alt = "\u5496\u5561\u8C46\u56FE\u7247\u9884\u89C8";
+    img.onerror = () => {
+      preview.empty();
+      preview.addClass("is-empty");
+      preview.createDiv({
+        cls: "coffee-tracker-image-placeholder",
+        text: "\u56FE\u7247\u8DEF\u5F84\u65E0\u6548\uFF0C\u5DF2\u4FDD\u7559\u539F\u503C"
+      });
+    };
+    preview.createDiv({
+      cls: "coffee-tracker-image-path",
+      text: currentValue
+    });
+  };
+  const saveClipboardImage = async (imageFile) => {
+    try {
+      const savedPath = await saveImageBlobToVault(
+        app,
+        imageFile,
+        getSuggestedName == null ? void 0 : getSuggestedName()
+      );
+      updateValue(savedPath);
+      new import_obsidian.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\u5230 ${savedPath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "\u4FDD\u5B58\u56FE\u7247\u5931\u8D25";
+      new import_obsidian.Notice(message);
+    }
+  };
+  pasteZone.addEventListener("click", () => {
+    pasteZone.focus();
+  });
+  pasteZone.addEventListener("paste", async (evt) => {
+    const imageFile = await extractImageFromClipboard(evt);
+    if (!imageFile) {
+      new import_obsidian.Notice("\u526A\u8D34\u677F\u91CC\u6CA1\u6709\u56FE\u7247");
+      return;
+    }
+    evt.preventDefault();
+    await saveClipboardImage(imageFile);
+  });
+  focusBtn.addEventListener("click", () => {
+    pasteZone.focus();
+    new import_obsidian.Notice("\u73B0\u5728\u53EF\u4EE5\u76F4\u63A5\u7C98\u8D34\u56FE\u7247");
+  });
+  clearBtn.addEventListener("click", () => {
+    updateValue("");
+  });
+  renderPreview();
+  updateButtons();
+}
+var import_obsidian, IMAGE_FOLDER;
+var init_beanImage = __esm({
+  "src/utils/beanImage.ts"() {
+    import_obsidian = require("obsidian");
+    IMAGE_FOLDER = "Coffee Bean Tracker/Images";
+  }
+});
+
 // src/modals/EditBeanModal.ts
 var EditBeanModal_exports = {};
 __export(EditBeanModal_exports, {
   EditBeanModal: () => EditBeanModal
 });
-var import_obsidian, EditBeanModal;
+var import_obsidian2, EditBeanModal;
 var init_EditBeanModal = __esm({
   "src/modals/EditBeanModal.ts"() {
-    import_obsidian = require("obsidian");
-    EditBeanModal = class extends import_obsidian.Modal {
+    import_obsidian2 = require("obsidian");
+    init_beanImage();
+    EditBeanModal = class extends import_obsidian2.Modal {
       constructor(app, plugin, bean, onSave) {
         super(app);
         this.plugin = plugin;
@@ -55,7 +240,6 @@ var init_EditBeanModal = __esm({
         };
         const fields = [
           { key: "name", label: "\u54C1\u540D" },
-          { key: "image", label: "\u56FE\u7247" },
           { key: "origin", label: "\u4EA7\u5730" },
           { key: "roaster", label: "\u70D8\u7119\u5546" },
           { key: "price", label: "\u4EF7\u683C (\xA5)", type: "number" },
@@ -67,7 +251,7 @@ var init_EditBeanModal = __esm({
           { key: "roastDate", label: "\u70D8\u7119\u65E5\u671F", type: "date" }
         ];
         for (const f of fields) {
-          new import_obsidian.Setting(contentEl).setName(f.label).addText((text) => {
+          new import_obsidian2.Setting(contentEl).setName(f.label).addText((text) => {
             if (f.type === "number") text.inputEl.type = "number";
             if (f.type === "date") text.inputEl.type = "date";
             text.setValue(form[f.key]);
@@ -75,8 +259,19 @@ var init_EditBeanModal = __esm({
               form[f.key] = v;
             });
           });
+          if (f.key === "name") {
+            renderBeanImageField({
+              containerEl: contentEl,
+              app: this.app,
+              value: form.image,
+              onChange: (value) => {
+                form.image = value;
+              },
+              getSuggestedName: () => form.name
+            });
+          }
         }
-        const btnRow = new import_obsidian.Setting(contentEl);
+        const btnRow = new import_obsidian2.Setting(contentEl);
         btnRow.addButton((btn) => {
           btn.setButtonText("\u4FDD\u5B58").setCta().onClick(async () => {
             await this.plugin.dataManager.updateBean(this.bean.id, {
@@ -116,11 +311,11 @@ var HistoryModal_exports = {};
 __export(HistoryModal_exports, {
   HistoryModal: () => HistoryModal
 });
-var import_obsidian2, HistoryModal;
+var import_obsidian3, HistoryModal;
 var init_HistoryModal = __esm({
   "src/modals/HistoryModal.ts"() {
-    import_obsidian2 = require("obsidian");
-    HistoryModal = class extends import_obsidian2.Modal {
+    import_obsidian3 = require("obsidian");
+    HistoryModal = class extends import_obsidian3.Modal {
       constructor(app, plugin, bean) {
         super(app);
         this.plugin = plugin;
@@ -169,11 +364,12 @@ var AddBeanModal_exports = {};
 __export(AddBeanModal_exports, {
   AddBeanModal: () => AddBeanModal
 });
-var import_obsidian5, AddBeanModal;
+var import_obsidian6, AddBeanModal;
 var init_AddBeanModal = __esm({
   "src/modals/AddBeanModal.ts"() {
-    import_obsidian5 = require("obsidian");
-    AddBeanModal = class extends import_obsidian5.Modal {
+    import_obsidian6 = require("obsidian");
+    init_beanImage();
+    AddBeanModal = class extends import_obsidian6.Modal {
       constructor(app, plugin, onSave) {
         super(app);
         this.plugin = plugin;
@@ -198,7 +394,6 @@ var init_AddBeanModal = __esm({
         };
         const fields = [
           { key: "name", label: "\u54C1\u540D", placeholder: "Ethiopia Yirgacheffe" },
-          { key: "image", label: "\u56FE\u7247", placeholder: "vault \u8DEF\u5F84\u6216 URL" },
           { key: "origin", label: "\u4EA7\u5730", placeholder: "Ethiopia" },
           { key: "roaster", label: "\u70D8\u7119\u5546", placeholder: "SEE" },
           { key: "price", label: "\u4EF7\u683C (\xA5)", type: "number", placeholder: "128" },
@@ -209,7 +404,7 @@ var init_AddBeanModal = __esm({
           { key: "roastDate", label: "\u70D8\u7119\u65E5\u671F", type: "date" }
         ];
         for (const f of fields) {
-          new import_obsidian5.Setting(contentEl).setName(f.label).addText((text) => {
+          new import_obsidian6.Setting(contentEl).setName(f.label).addText((text) => {
             if (f.type === "number") text.inputEl.type = "number";
             if (f.type === "date") text.inputEl.type = "date";
             if (f.placeholder) text.setPlaceholder(f.placeholder);
@@ -217,8 +412,19 @@ var init_AddBeanModal = __esm({
               form[f.key] = v;
             });
           });
+          if (f.key === "name") {
+            renderBeanImageField({
+              containerEl: contentEl,
+              app: this.app,
+              value: form.image,
+              onChange: (value) => {
+                form.image = value;
+              },
+              getSuggestedName: () => form.name
+            });
+          }
         }
-        new import_obsidian5.Setting(contentEl).addButton((btn) => {
+        new import_obsidian6.Setting(contentEl).addButton((btn) => {
           btn.setButtonText("\u4FDD\u5B58").setCta().onClick(async () => {
             if (!form.name) return;
             const totalWeight = parseFloat(form.totalWeight) || 0;
@@ -253,7 +459,7 @@ __export(main_exports, {
   default: () => CoffeeBeanTrackerPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -346,10 +552,10 @@ var DataManager = class {
 };
 
 // src/views/CoffeeView.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/views/KanbanRenderer.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var KanbanRenderer = class {
   constructor(container, beans, plugin, onRefresh) {
     this.container = container;
@@ -414,10 +620,10 @@ var KanbanRenderer = class {
       btn.addEventListener("click", async () => {
         const success = await this.plugin.dataManager.deduct(bean.id, preset);
         if (success) {
-          new import_obsidian3.Notice(`${bean.name}: -${preset.amount}g`);
+          new import_obsidian4.Notice(`${bean.name}: -${preset.amount}g`);
           this.onRefresh();
         } else {
-          new import_obsidian3.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
+          new import_obsidian4.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
         }
       });
     }
@@ -436,7 +642,7 @@ var KanbanRenderer = class {
 };
 
 // src/views/TableRenderer.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var TableRenderer = class {
   constructor(container, beans, plugin, onRefresh) {
     this.sortField = null;
@@ -536,10 +742,10 @@ var TableRenderer = class {
       btn.addEventListener("click", async () => {
         const success = await this.plugin.dataManager.deduct(bean.id, preset);
         if (success) {
-          new import_obsidian4.Notice(`${bean.name}: -${preset.amount}g`);
+          new import_obsidian5.Notice(`${bean.name}: -${preset.amount}g`);
           this.onRefresh();
         } else {
-          new import_obsidian4.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
+          new import_obsidian5.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
         }
       });
     }
@@ -587,7 +793,7 @@ var TableRenderer = class {
 
 // src/views/CoffeeView.ts
 var VIEW_TYPE_COFFEE = "coffee-bean-tracker";
-var CoffeeView = class extends import_obsidian6.ItemView {
+var CoffeeView = class extends import_obsidian7.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -660,8 +866,8 @@ var CoffeeView = class extends import_obsidian6.ItemView {
 };
 
 // src/settings.ts
-var import_obsidian7 = require("obsidian");
-var CoffeeTrackerSettingTab = class extends import_obsidian7.PluginSettingTab {
+var import_obsidian8 = require("obsidian");
+var CoffeeTrackerSettingTab = class extends import_obsidian8.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -674,7 +880,7 @@ var CoffeeTrackerSettingTab = class extends import_obsidian7.PluginSettingTab {
     const presets = this.plugin.dataManager.data.settings.presets;
     for (let i = 0; i < presets.length; i++) {
       const preset = presets[i];
-      new import_obsidian7.Setting(containerEl).setName(`\u9884\u8BBE ${i + 1}`).addText((text) => {
+      new import_obsidian8.Setting(containerEl).setName(`\u9884\u8BBE ${i + 1}`).addText((text) => {
         text.setPlaceholder("\u540D\u79F0").setValue(preset.label);
         text.onChange((v) => {
           preset.label = v;
@@ -695,7 +901,7 @@ var CoffeeTrackerSettingTab = class extends import_obsidian7.PluginSettingTab {
         });
       });
     }
-    new import_obsidian7.Setting(containerEl).addButton((btn) => {
+    new import_obsidian8.Setting(containerEl).addButton((btn) => {
       btn.setButtonText("+ \u6DFB\u52A0\u9884\u8BBE").onClick(() => {
         presets.push({ label: "\u65B0\u9884\u8BBE", amount: 15 });
         this.plugin.dataManager.save();
@@ -703,7 +909,7 @@ var CoffeeTrackerSettingTab = class extends import_obsidian7.PluginSettingTab {
       });
     });
     containerEl.createEl("h3", { text: "\u9ED8\u8BA4\u89C6\u56FE" });
-    new import_obsidian7.Setting(containerEl).setName("\u6253\u5F00\u65F6\u7684\u9ED8\u8BA4\u89C6\u56FE").addDropdown((drop) => {
+    new import_obsidian8.Setting(containerEl).setName("\u6253\u5F00\u65F6\u7684\u9ED8\u8BA4\u89C6\u56FE").addDropdown((drop) => {
       drop.addOption("kanban", "\u770B\u677F");
       drop.addOption("table", "\u8868\u683C");
       drop.setValue(this.plugin.dataManager.data.settings.defaultView);
@@ -716,7 +922,7 @@ var CoffeeTrackerSettingTab = class extends import_obsidian7.PluginSettingTab {
 };
 
 // src/main.ts
-var CoffeeBeanTrackerPlugin = class extends import_obsidian8.Plugin {
+var CoffeeBeanTrackerPlugin = class extends import_obsidian9.Plugin {
   async onload() {
     this.dataManager = new DataManager(this);
     await this.dataManager.load();
