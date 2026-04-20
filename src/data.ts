@@ -1,4 +1,14 @@
-import { CoffeeBean, CoffeeTrackerData, ConsumptionRecord, DEFAULT_DATA, DEFAULT_SETTINGS, DeductionPreset, generateId } from './types';
+import {
+  CoffeeBean,
+  CoffeeTrackerData,
+  ConsumptionRecord,
+  DEFAULT_DATA,
+  DEFAULT_DEDUCTION_PRESET,
+  DEFAULT_SETTINGS,
+  DeductionPreset,
+  generateId,
+  normalizeDeductionPreset,
+} from './types';
 import CoffeeBeanTrackerPlugin from './main';
 
 export class DataManager {
@@ -13,9 +23,15 @@ export class DataManager {
   async load() {
     const saved = await this.plugin.loadData();
     if (saved) {
+      const fallbackPreset = normalizeDeductionPreset(saved.settings?.presets?.[0], DEFAULT_DEDUCTION_PRESET);
+      const beans = (saved.beans || []).map((bean: Partial<CoffeeBean>) => ({
+        ...bean,
+        deductionPreset: normalizeDeductionPreset(bean.deductionPreset, fallbackPreset),
+      })) as CoffeeBean[];
+
       this.data = {
         settings: { ...DEFAULT_SETTINGS, ...saved.settings },
-        beans: saved.beans || [],
+        beans,
         history: saved.history || [],
       };
     }
@@ -39,7 +55,15 @@ export class DataManager {
   async updateBean(id: string, updates: Partial<CoffeeBean>) {
     const idx = this.data.beans.findIndex(b => b.id === id);
     if (idx === -1) return;
-    this.data.beans[idx] = { ...this.data.beans[idx], ...updates };
+    const nextBean = {
+      ...this.data.beans[idx],
+      ...updates,
+    };
+    nextBean.deductionPreset = normalizeDeductionPreset(
+      nextBean.deductionPreset,
+      this.data.beans[idx].deductionPreset || DEFAULT_DEDUCTION_PRESET,
+    );
+    this.data.beans[idx] = nextBean;
     await this.save();
   }
 

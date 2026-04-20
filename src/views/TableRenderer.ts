@@ -111,22 +111,20 @@ export class TableRenderer {
     this.editableCell(tr, bean, 'roastDate', 'date');
 
     const actionCell = tr.createEl('td', { cls: 'coffee-tracker-cell-actions' });
-    const presets = this.plugin.dataManager.data.settings.presets;
-    for (const preset of presets) {
-      const btn = actionCell.createEl('button', {
-        cls: 'coffee-tracker-btn coffee-tracker-btn-deduct-sm',
-        text: `-${preset.amount}g`,
-      });
-      btn.addEventListener('click', async () => {
-        const success = await this.plugin.dataManager.deduct(bean.id, preset);
-        if (success) {
-          new Notice(`${bean.name}: -${preset.amount}g`);
-          this.onRefresh();
-        } else {
-          new Notice('余量不足！');
-        }
-      });
-    }
+    const preset = bean.deductionPreset;
+    const btn = actionCell.createEl('button', {
+      cls: 'coffee-tracker-btn coffee-tracker-btn-deduct-sm',
+      text: `${preset.label} -${preset.amount}g`,
+    });
+    btn.addEventListener('click', async () => {
+      const success = await this.plugin.dataManager.deduct(bean.id, preset);
+      if (success) {
+        new Notice(`${bean.name}: -${preset.amount}g`);
+        this.onRefresh();
+      } else {
+        new Notice('余量不足！');
+      }
+    });
 
     const historyBtn = actionCell.createEl('button', { cls: 'coffee-tracker-btn-link', text: '历史' });
     historyBtn.addEventListener('click', () => {

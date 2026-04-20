@@ -11,6 +11,7 @@ export interface CoffeeBean {
   comment: string;
   purchaseDate: string;
   roastDate: string;
+  deductionPreset: DeductionPreset;
   archived: boolean;
 }
 
@@ -39,9 +40,14 @@ export interface CoffeeTrackerData {
   history: ConsumptionRecord[];
 }
 
+export const DEFAULT_DEDUCTION_PRESET: DeductionPreset = {
+  label: '单杯',
+  amount: 15,
+};
+
 export const DEFAULT_SETTINGS: CoffeeTrackerSettings = {
   presets: [
-    { label: '单杯', amount: 15 },
+    DEFAULT_DEDUCTION_PRESET,
     { label: '双杯', amount: 30 },
   ],
   defaultView: 'kanban',
@@ -56,6 +62,23 @@ export const DEFAULT_DATA: CoffeeTrackerData = {
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+export function normalizeDeductionPreset(
+  preset: Partial<DeductionPreset> | null | undefined,
+  fallback: DeductionPreset = DEFAULT_DEDUCTION_PRESET,
+): DeductionPreset {
+  const rawLabel = typeof preset?.label === 'string' ? preset.label.trim() : '';
+  const fallbackLabel = fallback.label.trim() || DEFAULT_DEDUCTION_PRESET.label;
+  const label = rawLabel || fallbackLabel;
+
+  const rawAmount = Number(preset?.amount);
+  const fallbackAmount = Number.isFinite(fallback.amount) && fallback.amount > 0
+    ? fallback.amount
+    : DEFAULT_DEDUCTION_PRESET.amount;
+  const amount = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : fallbackAmount;
+
+  return { label, amount };
 }
 
 export function getPricePerGram(bean: CoffeeBean): number {

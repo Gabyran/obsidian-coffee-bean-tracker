@@ -1,6 +1,6 @@
 import { App, Modal, Setting } from 'obsidian';
 import CoffeeBeanTrackerPlugin from '../main';
-import { CoffeeBean } from '../types';
+import { CoffeeBean, normalizeDeductionPreset } from '../types';
 import { renderBeanImageField } from '../utils/beanImage';
 
 export class EditBeanModal extends Modal {
@@ -33,6 +33,8 @@ export class EditBeanModal extends Modal {
       comment: this.bean.comment,
       purchaseDate: this.bean.purchaseDate,
       roastDate: this.bean.roastDate,
+      deductionLabel: this.bean.deductionPreset.label,
+      deductionAmount: String(this.bean.deductionPreset.amount),
     };
 
     const fields: { key: string; label: string; type?: string }[] = [
@@ -46,6 +48,8 @@ export class EditBeanModal extends Modal {
       { key: 'comment', label: '简评' },
       { key: 'purchaseDate', label: '购入日期', type: 'date' },
       { key: 'roastDate', label: '烘焙日期', type: 'date' },
+      { key: 'deductionLabel', label: '扣减预设名称' },
+      { key: 'deductionAmount', label: '扣减预设克数 (g)', type: 'number' },
     ];
 
     for (const f of fields) {
@@ -74,6 +78,10 @@ export class EditBeanModal extends Modal {
     const btnRow = new Setting(contentEl);
     btnRow.addButton(btn => {
       btn.setButtonText('保存').setCta().onClick(async () => {
+        const deductionPreset = normalizeDeductionPreset({
+          label: form.deductionLabel,
+          amount: parseFloat(form.deductionAmount),
+        }, this.bean.deductionPreset);
         await this.plugin.dataManager.updateBean(this.bean.id, {
           name: form.name,
           image: form.image,
@@ -86,6 +94,7 @@ export class EditBeanModal extends Modal {
           comment: form.comment,
           purchaseDate: form.purchaseDate,
           roastDate: form.roastDate,
+          deductionPreset,
         });
         this.close();
         this.onSave();

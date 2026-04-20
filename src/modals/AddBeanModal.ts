@@ -1,5 +1,6 @@
 import { App, Modal, Setting } from 'obsidian';
 import CoffeeBeanTrackerPlugin from '../main';
+import { DEFAULT_DEDUCTION_PRESET, normalizeDeductionPreset } from '../types';
 import { renderBeanImageField } from '../utils/beanImage';
 
 export class AddBeanModal extends Modal {
@@ -22,6 +23,8 @@ export class AddBeanModal extends Modal {
       name: '', image: '', origin: '', roaster: '',
       price: '', totalWeight: '', rating: '7',
       comment: '', purchaseDate: '', roastDate: '',
+      deductionLabel: DEFAULT_DEDUCTION_PRESET.label,
+      deductionAmount: String(DEFAULT_DEDUCTION_PRESET.amount),
     };
 
     const fields: { key: string; label: string; type?: string; placeholder?: string }[] = [
@@ -34,6 +37,8 @@ export class AddBeanModal extends Modal {
       { key: 'comment', label: '简评', placeholder: '花香明显，酸甜平衡' },
       { key: 'purchaseDate', label: '购入日期', type: 'date' },
       { key: 'roastDate', label: '烘焙日期', type: 'date' },
+      { key: 'deductionLabel', label: '扣减预设名称', placeholder: '单杯' },
+      { key: 'deductionAmount', label: '扣减预设克数 (g)', type: 'number', placeholder: '15' },
     ];
 
     for (const f of fields) {
@@ -66,6 +71,10 @@ export class AddBeanModal extends Modal {
           .onClick(async () => {
             if (!form.name) return;
             const totalWeight = parseFloat(form.totalWeight) || 0;
+            const deductionPreset = normalizeDeductionPreset({
+              label: form.deductionLabel,
+              amount: parseFloat(form.deductionAmount),
+            });
             await this.plugin.dataManager.addBean({
               name: form.name,
               image: form.image,
@@ -78,6 +87,7 @@ export class AddBeanModal extends Modal {
               comment: form.comment,
               purchaseDate: form.purchaseDate,
               roastDate: form.roastDate,
+              deductionPreset,
             });
             this.close();
             this.onSave();

@@ -19,6 +19,46 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/types.ts
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+function normalizeDeductionPreset(preset, fallback = DEFAULT_DEDUCTION_PRESET) {
+  const rawLabel = typeof (preset == null ? void 0 : preset.label) === "string" ? preset.label.trim() : "";
+  const fallbackLabel = fallback.label.trim() || DEFAULT_DEDUCTION_PRESET.label;
+  const label = rawLabel || fallbackLabel;
+  const rawAmount = Number(preset == null ? void 0 : preset.amount);
+  const fallbackAmount = Number.isFinite(fallback.amount) && fallback.amount > 0 ? fallback.amount : DEFAULT_DEDUCTION_PRESET.amount;
+  const amount = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : fallbackAmount;
+  return { label, amount };
+}
+function getPricePerGram(bean) {
+  if (bean.totalWeight <= 0) return 0;
+  return bean.price / bean.totalWeight;
+}
+var DEFAULT_DEDUCTION_PRESET, DEFAULT_SETTINGS, DEFAULT_DATA;
+var init_types = __esm({
+  "src/types.ts"() {
+    DEFAULT_DEDUCTION_PRESET = {
+      label: "\u5355\u676F",
+      amount: 15
+    };
+    DEFAULT_SETTINGS = {
+      presets: [
+        DEFAULT_DEDUCTION_PRESET,
+        { label: "\u53CC\u676F", amount: 30 }
+      ],
+      defaultView: "kanban",
+      showArchived: false
+    };
+    DEFAULT_DATA = {
+      settings: DEFAULT_SETTINGS,
+      beans: [],
+      history: []
+    };
+  }
+});
+
 // src/utils/beanImage.ts
 function sanitizeFileNamePart(value) {
   const cleaned = value.trim().replace(/[\\/:*?"<>|#^\[\]]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
@@ -84,6 +124,7 @@ function renderBeanImageField(options) {
   const { containerEl, app, onChange, getSuggestedName } = options;
   let currentValue = options.value || "";
   let pathInput = null;
+  let isSaving = false;
   const imageSetting = new import_obsidian.Setting(containerEl).setName("\u56FE\u7247").setDesc("\u652F\u6301\u624B\u586B\u8DEF\u5F84\uFF0C\u4E5F\u652F\u6301\u5728\u4E0B\u65B9\u533A\u57DF\u70B9\u51FB\u540E\u76F4\u63A5\u7C98\u8D34\u526A\u8D34\u677F\u56FE\u7247");
   imageSetting.addText((text) => {
     pathInput = text;
@@ -104,20 +145,6 @@ function renderBeanImageField(options) {
   });
   const imageField = containerEl.createDiv({ cls: "coffee-tracker-image-field" });
   const preview = imageField.createDiv({ cls: "coffee-tracker-image-preview" });
-  const pasteZone = imageField.createDiv({
-    cls: "coffee-tracker-image-paste-zone",
-    text: "\u70B9\u51FB\u8FD9\u91CC\u540E\u6309 Cmd/Ctrl + V \u7C98\u8D34\u56FE\u7247"
-  });
-  pasteZone.tabIndex = 0;
-  const buttonRow = imageField.createDiv({ cls: "coffee-tracker-image-actions" });
-  const focusBtn = buttonRow.createEl("button", {
-    cls: "coffee-tracker-btn",
-    text: "\u51C6\u5907\u7C98\u8D34"
-  });
-  const clearBtn = buttonRow.createEl("button", {
-    cls: "coffee-tracker-btn",
-    text: "\u6E05\u7A7A\u56FE\u7247"
-  });
   const updateValue = (value) => {
     currentValue = value.trim();
     onChange(currentValue);
@@ -128,7 +155,9 @@ function renderBeanImageField(options) {
     updateButtons();
   };
   const updateButtons = () => {
-    clearBtn.disabled = !currentValue;
+    if (pathInput == null ? void 0 : pathInput.inputEl) {
+      pathInput.inputEl.disabled = isSaving;
+    }
   };
   const renderPreview = () => {
     preview.empty();
@@ -160,6 +189,9 @@ function renderBeanImageField(options) {
     });
   };
   const saveClipboardImage = async (imageFile) => {
+    if (isSaving) return;
+    isSaving = true;
+    updateButtons();
     try {
       const savedPath = await saveImageBlobToVault(
         app,
@@ -171,27 +203,11 @@ function renderBeanImageField(options) {
     } catch (error) {
       const message = error instanceof Error ? error.message : "\u4FDD\u5B58\u56FE\u7247\u5931\u8D25";
       new import_obsidian.Notice(message);
+    } finally {
+      isSaving = false;
+      updateButtons();
     }
   };
-  pasteZone.addEventListener("click", () => {
-    pasteZone.focus();
-  });
-  pasteZone.addEventListener("paste", async (evt) => {
-    const imageFile = await extractImageFromClipboard(evt);
-    if (!imageFile) {
-      new import_obsidian.Notice("\u526A\u8D34\u677F\u91CC\u6CA1\u6709\u56FE\u7247");
-      return;
-    }
-    evt.preventDefault();
-    await saveClipboardImage(imageFile);
-  });
-  focusBtn.addEventListener("click", () => {
-    pasteZone.focus();
-    new import_obsidian.Notice("\u73B0\u5728\u53EF\u4EE5\u76F4\u63A5\u7C98\u8D34\u56FE\u7247");
-  });
-  clearBtn.addEventListener("click", () => {
-    updateValue("");
-  });
   renderPreview();
   updateButtons();
 }
@@ -212,6 +228,7 @@ var import_obsidian2, EditBeanModal;
 var init_EditBeanModal = __esm({
   "src/modals/EditBeanModal.ts"() {
     import_obsidian2 = require("obsidian");
+    init_types();
     init_beanImage();
     EditBeanModal = class extends import_obsidian2.Modal {
       constructor(app, plugin, bean, onSave) {
@@ -236,7 +253,9 @@ var init_EditBeanModal = __esm({
           rating: String(this.bean.rating),
           comment: this.bean.comment,
           purchaseDate: this.bean.purchaseDate,
-          roastDate: this.bean.roastDate
+          roastDate: this.bean.roastDate,
+          deductionLabel: this.bean.deductionPreset.label,
+          deductionAmount: String(this.bean.deductionPreset.amount)
         };
         const fields = [
           { key: "name", label: "\u54C1\u540D" },
@@ -248,7 +267,9 @@ var init_EditBeanModal = __esm({
           { key: "rating", label: "\u8BC4\u5206 (1-10)", type: "number" },
           { key: "comment", label: "\u7B80\u8BC4" },
           { key: "purchaseDate", label: "\u8D2D\u5165\u65E5\u671F", type: "date" },
-          { key: "roastDate", label: "\u70D8\u7119\u65E5\u671F", type: "date" }
+          { key: "roastDate", label: "\u70D8\u7119\u65E5\u671F", type: "date" },
+          { key: "deductionLabel", label: "\u6263\u51CF\u9884\u8BBE\u540D\u79F0" },
+          { key: "deductionAmount", label: "\u6263\u51CF\u9884\u8BBE\u514B\u6570 (g)", type: "number" }
         ];
         for (const f of fields) {
           new import_obsidian2.Setting(contentEl).setName(f.label).addText((text) => {
@@ -274,6 +295,10 @@ var init_EditBeanModal = __esm({
         const btnRow = new import_obsidian2.Setting(contentEl);
         btnRow.addButton((btn) => {
           btn.setButtonText("\u4FDD\u5B58").setCta().onClick(async () => {
+            const deductionPreset = normalizeDeductionPreset({
+              label: form.deductionLabel,
+              amount: parseFloat(form.deductionAmount)
+            }, this.bean.deductionPreset);
             await this.plugin.dataManager.updateBean(this.bean.id, {
               name: form.name,
               image: form.image,
@@ -285,7 +310,8 @@ var init_EditBeanModal = __esm({
               rating: Math.min(10, Math.max(1, parseInt(form.rating) || 7)),
               comment: form.comment,
               purchaseDate: form.purchaseDate,
-              roastDate: form.roastDate
+              roastDate: form.roastDate,
+              deductionPreset
             });
             this.close();
             this.onSave();
@@ -368,6 +394,7 @@ var import_obsidian6, AddBeanModal;
 var init_AddBeanModal = __esm({
   "src/modals/AddBeanModal.ts"() {
     import_obsidian6 = require("obsidian");
+    init_types();
     init_beanImage();
     AddBeanModal = class extends import_obsidian6.Modal {
       constructor(app, plugin, onSave) {
@@ -390,7 +417,9 @@ var init_AddBeanModal = __esm({
           rating: "7",
           comment: "",
           purchaseDate: "",
-          roastDate: ""
+          roastDate: "",
+          deductionLabel: DEFAULT_DEDUCTION_PRESET.label,
+          deductionAmount: String(DEFAULT_DEDUCTION_PRESET.amount)
         };
         const fields = [
           { key: "name", label: "\u54C1\u540D", placeholder: "Ethiopia Yirgacheffe" },
@@ -401,7 +430,9 @@ var init_AddBeanModal = __esm({
           { key: "rating", label: "\u8BC4\u5206 (1-10)", type: "number", placeholder: "7" },
           { key: "comment", label: "\u7B80\u8BC4", placeholder: "\u82B1\u9999\u660E\u663E\uFF0C\u9178\u751C\u5E73\u8861" },
           { key: "purchaseDate", label: "\u8D2D\u5165\u65E5\u671F", type: "date" },
-          { key: "roastDate", label: "\u70D8\u7119\u65E5\u671F", type: "date" }
+          { key: "roastDate", label: "\u70D8\u7119\u65E5\u671F", type: "date" },
+          { key: "deductionLabel", label: "\u6263\u51CF\u9884\u8BBE\u540D\u79F0", placeholder: "\u5355\u676F" },
+          { key: "deductionAmount", label: "\u6263\u51CF\u9884\u8BBE\u514B\u6570 (g)", type: "number", placeholder: "15" }
         ];
         for (const f of fields) {
           new import_obsidian6.Setting(contentEl).setName(f.label).addText((text) => {
@@ -428,6 +459,10 @@ var init_AddBeanModal = __esm({
           btn.setButtonText("\u4FDD\u5B58").setCta().onClick(async () => {
             if (!form.name) return;
             const totalWeight = parseFloat(form.totalWeight) || 0;
+            const deductionPreset = normalizeDeductionPreset({
+              label: form.deductionLabel,
+              amount: parseFloat(form.deductionAmount)
+            });
             await this.plugin.dataManager.addBean({
               name: form.name,
               image: form.image,
@@ -439,7 +474,8 @@ var init_AddBeanModal = __esm({
               rating: Math.min(10, Math.max(1, parseInt(form.rating) || 7)),
               comment: form.comment,
               purchaseDate: form.purchaseDate,
-              roastDate: form.roastDate
+              roastDate: form.roastDate,
+              deductionPreset
             });
             this.close();
             this.onSave();
@@ -461,40 +497,25 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian9 = require("obsidian");
 
-// src/types.ts
-var DEFAULT_SETTINGS = {
-  presets: [
-    { label: "\u5355\u676F", amount: 15 },
-    { label: "\u53CC\u676F", amount: 30 }
-  ],
-  defaultView: "kanban",
-  showArchived: false
-};
-var DEFAULT_DATA = {
-  settings: DEFAULT_SETTINGS,
-  beans: [],
-  history: []
-};
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-function getPricePerGram(bean) {
-  if (bean.totalWeight <= 0) return 0;
-  return bean.price / bean.totalWeight;
-}
-
 // src/data.ts
+init_types();
 var DataManager = class {
   constructor(plugin) {
     this.plugin = plugin;
     this.data = DEFAULT_DATA;
   }
   async load() {
+    var _a, _b;
     const saved = await this.plugin.loadData();
     if (saved) {
+      const fallbackPreset = normalizeDeductionPreset((_b = (_a = saved.settings) == null ? void 0 : _a.presets) == null ? void 0 : _b[0], DEFAULT_DEDUCTION_PRESET);
+      const beans = (saved.beans || []).map((bean) => ({
+        ...bean,
+        deductionPreset: normalizeDeductionPreset(bean.deductionPreset, fallbackPreset)
+      }));
       this.data = {
         settings: { ...DEFAULT_SETTINGS, ...saved.settings },
-        beans: saved.beans || [],
+        beans,
         history: saved.history || []
       };
     }
@@ -515,7 +536,15 @@ var DataManager = class {
   async updateBean(id, updates) {
     const idx = this.data.beans.findIndex((b) => b.id === id);
     if (idx === -1) return;
-    this.data.beans[idx] = { ...this.data.beans[idx], ...updates };
+    const nextBean = {
+      ...this.data.beans[idx],
+      ...updates
+    };
+    nextBean.deductionPreset = normalizeDeductionPreset(
+      nextBean.deductionPreset,
+      this.data.beans[idx].deductionPreset || DEFAULT_DEDUCTION_PRESET
+    );
+    this.data.beans[idx] = nextBean;
     await this.save();
   }
   async deleteBean(id) {
@@ -556,6 +585,7 @@ var import_obsidian7 = require("obsidian");
 
 // src/views/KanbanRenderer.ts
 var import_obsidian4 = require("obsidian");
+init_types();
 var KanbanRenderer = class {
   constructor(container, beans, plugin, onRefresh) {
     this.container = container;
@@ -611,22 +641,7 @@ var KanbanRenderer = class {
     meta.createSpan({ text: `\xA5${ppg.toFixed(2)}/g` });
     meta.createSpan({ text: `\u8BC4\u5206: ${bean.rating}/10` });
     const actions = card.createDiv({ cls: "coffee-tracker-card-actions" });
-    const presets = this.plugin.dataManager.data.settings.presets;
-    for (const preset of presets) {
-      const btn = actions.createEl("button", {
-        cls: "coffee-tracker-btn coffee-tracker-btn-deduct",
-        text: `${preset.label} -${preset.amount}g`
-      });
-      btn.addEventListener("click", async () => {
-        const success = await this.plugin.dataManager.deduct(bean.id, preset);
-        if (success) {
-          new import_obsidian4.Notice(`${bean.name}: -${preset.amount}g`);
-          this.onRefresh();
-        } else {
-          new import_obsidian4.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
-        }
-      });
-    }
+    this.renderPresetEditor(actions, bean);
     const bottomActions = card.createDiv({ cls: "coffee-tracker-card-bottom" });
     const editBtn = bottomActions.createEl("button", { cls: "coffee-tracker-btn-link", text: "\u7F16\u8F91" });
     editBtn.addEventListener("click", () => {
@@ -639,10 +654,106 @@ var KanbanRenderer = class {
       new HistoryModal2(this.plugin.app, this.plugin, bean).open();
     });
   }
+  renderPresetEditor(container, bean) {
+    const wrapper = container.createDiv({ cls: "coffee-tracker-preset-editor" });
+    wrapper.createDiv({ cls: "coffee-tracker-preset-label", text: "\u5E93\u5B58\u51CF\u5C11\u9884\u8BBE" });
+    const fields = wrapper.createDiv({ cls: "coffee-tracker-preset-fields" });
+    const labelInput = fields.createEl("input", {
+      cls: "coffee-tracker-preset-input",
+      type: "text",
+      placeholder: "\u540D\u79F0"
+    });
+    labelInput.value = bean.deductionPreset.label;
+    const amountGroup = fields.createDiv({ cls: "coffee-tracker-preset-amount-group" });
+    const amountInput = amountGroup.createEl("input", {
+      cls: "coffee-tracker-preset-input coffee-tracker-preset-input-amount",
+      type: "number",
+      placeholder: "\u514B\u6570"
+    });
+    amountInput.value = String(bean.deductionPreset.amount);
+    amountInput.min = "1";
+    amountInput.step = "1";
+    amountGroup.createSpan({ cls: "coffee-tracker-preset-unit", text: "g" });
+    const hint = wrapper.createDiv({
+      cls: "coffee-tracker-preset-hint",
+      text: "\u76F4\u63A5\u4FEE\u6539\u540D\u79F0\u6216\u514B\u6570\uFF0C\u4F1A\u81EA\u52A8\u4FDD\u5B58"
+    });
+    const actionBtn = wrapper.createEl("button", {
+      cls: "coffee-tracker-btn coffee-tracker-btn-deduct"
+    });
+    let lastSavedPreset = normalizeDeductionPreset(bean.deductionPreset);
+    let saveTimer = null;
+    let isSaving = false;
+    const getDraftPreset = () => normalizeDeductionPreset({
+      label: labelInput.value,
+      amount: parseFloat(amountInput.value)
+    }, lastSavedPreset);
+    const renderActionLabel = () => {
+      const draft = getDraftPreset();
+      actionBtn.textContent = `${draft.label} -${draft.amount}g`;
+    };
+    const persistPreset = async (force = false) => {
+      if (saveTimer !== null) {
+        window.clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      const nextPreset = getDraftPreset();
+      labelInput.value = nextPreset.label;
+      amountInput.value = String(nextPreset.amount);
+      renderActionLabel();
+      const changed = nextPreset.label !== lastSavedPreset.label || nextPreset.amount !== lastSavedPreset.amount;
+      if (!changed) return lastSavedPreset;
+      if (isSaving) return lastSavedPreset;
+      isSaving = true;
+      hint.textContent = "\u4FDD\u5B58\u4E2D...";
+      try {
+        await this.plugin.dataManager.updateBean(bean.id, { deductionPreset: nextPreset });
+        bean.deductionPreset = nextPreset;
+        lastSavedPreset = nextPreset;
+        hint.textContent = "\u5DF2\u81EA\u52A8\u4FDD\u5B58";
+      } catch (error) {
+        hint.textContent = "\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5";
+        new import_obsidian4.Notice(error instanceof Error ? error.message : "\u4FDD\u5B58\u9884\u8BBE\u5931\u8D25");
+      } finally {
+        isSaving = false;
+      }
+      return lastSavedPreset;
+    };
+    const scheduleSave = () => {
+      renderActionLabel();
+      hint.textContent = "\u6B63\u5728\u4FEE\u6539...";
+      if (saveTimer !== null) {
+        window.clearTimeout(saveTimer);
+      }
+      saveTimer = window.setTimeout(() => {
+        void persistPreset();
+      }, 300);
+    };
+    labelInput.addEventListener("input", scheduleSave);
+    amountInput.addEventListener("input", scheduleSave);
+    labelInput.addEventListener("blur", () => {
+      void persistPreset(true);
+    });
+    amountInput.addEventListener("blur", () => {
+      void persistPreset(true);
+    });
+    renderActionLabel();
+    actionBtn.addEventListener("click", async () => {
+      const preset = await persistPreset(true);
+      const success = await this.plugin.dataManager.deduct(bean.id, preset);
+      if (success) {
+        new import_obsidian4.Notice(`${bean.name}: -${preset.amount}g`);
+        this.onRefresh();
+      } else {
+        new import_obsidian4.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
+      }
+    });
+  }
 };
 
 // src/views/TableRenderer.ts
 var import_obsidian5 = require("obsidian");
+init_types();
 var TableRenderer = class {
   constructor(container, beans, plugin, onRefresh) {
     this.sortField = null;
@@ -733,22 +844,20 @@ var TableRenderer = class {
     this.editableCell(tr, bean, "purchaseDate", "date");
     this.editableCell(tr, bean, "roastDate", "date");
     const actionCell = tr.createEl("td", { cls: "coffee-tracker-cell-actions" });
-    const presets = this.plugin.dataManager.data.settings.presets;
-    for (const preset of presets) {
-      const btn = actionCell.createEl("button", {
-        cls: "coffee-tracker-btn coffee-tracker-btn-deduct-sm",
-        text: `-${preset.amount}g`
-      });
-      btn.addEventListener("click", async () => {
-        const success = await this.plugin.dataManager.deduct(bean.id, preset);
-        if (success) {
-          new import_obsidian5.Notice(`${bean.name}: -${preset.amount}g`);
-          this.onRefresh();
-        } else {
-          new import_obsidian5.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
-        }
-      });
-    }
+    const preset = bean.deductionPreset;
+    const btn = actionCell.createEl("button", {
+      cls: "coffee-tracker-btn coffee-tracker-btn-deduct-sm",
+      text: `${preset.label} -${preset.amount}g`
+    });
+    btn.addEventListener("click", async () => {
+      const success = await this.plugin.dataManager.deduct(bean.id, preset);
+      if (success) {
+        new import_obsidian5.Notice(`${bean.name}: -${preset.amount}g`);
+        this.onRefresh();
+      } else {
+        new import_obsidian5.Notice("\u4F59\u91CF\u4E0D\u8DB3\uFF01");
+      }
+    });
     const historyBtn = actionCell.createEl("button", { cls: "coffee-tracker-btn-link", text: "\u5386\u53F2" });
     historyBtn.addEventListener("click", () => {
       const { HistoryModal: HistoryModal2 } = (init_HistoryModal(), __toCommonJS(HistoryModal_exports));
@@ -876,38 +985,7 @@ var CoffeeTrackerSettingTab = class extends import_obsidian8.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u5496\u5561\u8C46\u5E93\u5B58\u8BBE\u7F6E" });
-    containerEl.createEl("h3", { text: "\u6263\u51CF\u9884\u8BBE" });
-    const presets = this.plugin.dataManager.data.settings.presets;
-    for (let i = 0; i < presets.length; i++) {
-      const preset = presets[i];
-      new import_obsidian8.Setting(containerEl).setName(`\u9884\u8BBE ${i + 1}`).addText((text) => {
-        text.setPlaceholder("\u540D\u79F0").setValue(preset.label);
-        text.onChange((v) => {
-          preset.label = v;
-          this.plugin.dataManager.save();
-        });
-      }).addText((text) => {
-        text.inputEl.type = "number";
-        text.setPlaceholder("\u514B\u6570").setValue(String(preset.amount));
-        text.onChange((v) => {
-          preset.amount = parseInt(v) || 0;
-          this.plugin.dataManager.save();
-        });
-      }).addButton((btn) => {
-        btn.setIcon("trash").setWarning().onClick(() => {
-          presets.splice(i, 1);
-          this.plugin.dataManager.save();
-          this.display();
-        });
-      });
-    }
-    new import_obsidian8.Setting(containerEl).addButton((btn) => {
-      btn.setButtonText("+ \u6DFB\u52A0\u9884\u8BBE").onClick(() => {
-        presets.push({ label: "\u65B0\u9884\u8BBE", amount: 15 });
-        this.plugin.dataManager.save();
-        this.display();
-      });
-    });
+    new import_obsidian8.Setting(containerEl).setName("\u6263\u51CF\u9884\u8BBE").setDesc("\u73B0\u5728\u6BCF\u4E2A\u8C46\u5B50\u5355\u72EC\u4FDD\u5B58\u4E00\u4E2A\u6263\u51CF\u9884\u8BBE\u3002\u53EF\u76F4\u63A5\u5728\u770B\u677F\u5361\u7247\u91CC\u4FEE\u6539\uFF0C\u4E5F\u53EF\u5728\u65B0\u589E/\u7F16\u8F91\u5F39\u7A97\u91CC\u8BBE\u7F6E\u3002");
     containerEl.createEl("h3", { text: "\u9ED8\u8BA4\u89C6\u56FE" });
     new import_obsidian8.Setting(containerEl).setName("\u6253\u5F00\u65F6\u7684\u9ED8\u8BA4\u89C6\u56FE").addDropdown((drop) => {
       drop.addOption("kanban", "\u770B\u677F");

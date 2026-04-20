@@ -85,7 +85,7 @@
 
 .coffee-tracker-card-img {
   width: 100%;
-  height: 160px;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
   background: var(--background-secondary);
 }
@@ -163,22 +163,74 @@
 }
 
 .coffee-tracker-card-actions {
-  display: flex;
-  gap: 6px;
+  display: block;
   margin-bottom: 8px;
 }
 
 .coffee-tracker-btn-deduct {
   font-size: 12px;
-  padding: 3px 8px;
+  width: 100%;
+  padding: 6px 10px;
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .coffee-tracker-btn-deduct:hover {
   background: var(--interactive-accent-hover);
+}
+
+.coffee-tracker-preset-editor {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--background-secondary);
+}
+
+.coffee-tracker-preset-label {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.coffee-tracker-preset-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.coffee-tracker-preset-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+}
+
+.coffee-tracker-preset-amount-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.coffee-tracker-preset-input-amount {
+  text-align: right;
+}
+
+.coffee-tracker-preset-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.coffee-tracker-preset-hint {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .coffee-tracker-card-bottom {
@@ -357,30 +409,4 @@
   font-size: 11px;
   color: var(--text-muted);
   word-break: break-all;
-}
-
-.coffee-tracker-image-paste-zone {
-  margin-top: 10px;
-  border: 1px dashed var(--background-modifier-border);
-  border-radius: 8px;
-  padding: 14px 12px;
-  font-size: 13px;
-  color: var(--text-muted);
-  text-align: center;
-  background: var(--background-primary-alt);
-  cursor: pointer;
-  outline: none;
-}
-
-.coffee-tracker-image-paste-zone:hover,
-.coffee-tracker-image-paste-zone:focus {
-  border-color: var(--interactive-accent);
-  color: var(--text-normal);
-  background: var(--background-secondary-alt);
-}
-
-.coffee-tracker-image-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
 }

@@ -93,6 +93,7 @@ export function renderBeanImageField(options: BeanImageFieldOptions): void {
   const { containerEl, app, onChange, getSuggestedName } = options;
   let currentValue = options.value || '';
   let pathInput: TextComponent | null = null;
+  let isSaving = false;
 
   const imageSetting = new Setting(containerEl)
     .setName('图片')
@@ -118,21 +119,6 @@ export function renderBeanImageField(options: BeanImageFieldOptions): void {
 
   const imageField = containerEl.createDiv({ cls: 'coffee-tracker-image-field' });
   const preview = imageField.createDiv({ cls: 'coffee-tracker-image-preview' });
-  const pasteZone = imageField.createDiv({
-    cls: 'coffee-tracker-image-paste-zone',
-    text: '点击这里后按 Cmd/Ctrl + V 粘贴图片',
-  });
-  pasteZone.tabIndex = 0;
-
-  const buttonRow = imageField.createDiv({ cls: 'coffee-tracker-image-actions' });
-  const focusBtn = buttonRow.createEl('button', {
-    cls: 'coffee-tracker-btn',
-    text: '准备粘贴',
-  });
-  const clearBtn = buttonRow.createEl('button', {
-    cls: 'coffee-tracker-btn',
-    text: '清空图片',
-  });
 
   const updateValue = (value: string) => {
     currentValue = value.trim();
@@ -145,7 +131,9 @@ export function renderBeanImageField(options: BeanImageFieldOptions): void {
   };
 
   const updateButtons = () => {
-    clearBtn.disabled = !currentValue;
+    if (pathInput?.inputEl) {
+      pathInput.inputEl.disabled = isSaving;
+    }
   };
 
   const renderPreview = () => {
@@ -181,7 +169,10 @@ export function renderBeanImageField(options: BeanImageFieldOptions): void {
     });
   };
 
-  const saveClipboardImage = async (imageFile: File) => {
+  const saveClipboardImage = async (imageFile: Blob) => {
+    if (isSaving) return;
+    isSaving = true;
+    updateButtons();
     try {
       const savedPath = await saveImageBlobToVault(
         app,
@@ -193,31 +184,11 @@ export function renderBeanImageField(options: BeanImageFieldOptions): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : '保存图片失败';
       new Notice(message);
+    } finally {
+      isSaving = false;
+      updateButtons();
     }
   };
-
-  pasteZone.addEventListener('click', () => {
-    pasteZone.focus();
-  });
-
-  pasteZone.addEventListener('paste', async (evt: ClipboardEvent) => {
-    const imageFile = await extractImageFromClipboard(evt);
-    if (!imageFile) {
-      new Notice('剪贴板里没有图片');
-      return;
-    }
-    evt.preventDefault();
-    await saveClipboardImage(imageFile);
-  });
-
-  focusBtn.addEventListener('click', () => {
-    pasteZone.focus();
-    new Notice('现在可以直接粘贴图片');
-  });
-
-  clearBtn.addEventListener('click', () => {
-    updateValue('');
-  });
 
   renderPreview();
   updateButtons();
