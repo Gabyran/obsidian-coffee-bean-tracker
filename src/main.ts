@@ -1,5 +1,4 @@
 import { Plugin } from 'obsidian';
-import { CoffeeTrackerData, DEFAULT_DATA, DEFAULT_SETTINGS } from './types';
 import { DataManager } from './data';
 import { CoffeeView, VIEW_TYPE_COFFEE } from './views/CoffeeView';
 import { CoffeeTrackerSettingTab } from './settings';
@@ -35,6 +34,14 @@ export default class CoffeeBeanTrackerPlugin extends Plugin {
       leaf = newLeaf;
     }
     workspace.revealLeaf(leaf);
+  }
+
+  refreshViews() {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_COFFEE)) {
+      if (leaf.view instanceof CoffeeView) {
+        leaf.view.refresh();
+      }
+    }
   }
 
   onunload() {}

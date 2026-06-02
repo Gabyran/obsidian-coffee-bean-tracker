@@ -1,5 +1,12 @@
 import { Notice } from 'obsidian';
-import { CoffeeBean, DeductionPreset, getPricePerGram, normalizeDeductionPreset } from '../types';
+import {
+  CoffeeBean,
+  DeductionPreset,
+  formatDisplayNumber,
+  formatRatingDisplay,
+  getPricePerGram,
+  normalizeDeductionPreset,
+} from '../types';
 import CoffeeBeanTrackerPlugin from '../main';
 
 export class KanbanRenderer {
@@ -53,23 +60,27 @@ export class KanbanRenderer {
 
     const details = info.createDiv({ cls: 'coffee-tracker-card-details' });
     if (bean.origin) details.createDiv({ text: `产地: ${bean.origin}` });
+    if (bean.process) details.createDiv({ text: `处理法: ${bean.process}` });
+    if (bean.variety) details.createDiv({ text: `豆种: ${bean.variety}` });
     if (bean.roaster) details.createDiv({ text: `烘焙商: ${bean.roaster}` });
+    if (bean.flavor) details.createDiv({ text: `风味: ${bean.flavor}` });
 
     const progressContainer = info.createDiv({ cls: 'coffee-tracker-progress-container' });
     const ratio = bean.totalWeight > 0 ? bean.remaining / bean.totalWeight : 0;
+    const displayPrecision = this.plugin.dataManager.data.settings.displayPrecision;
     const progressBar = progressContainer.createDiv({ cls: 'coffee-tracker-progress-bar' });
     const progressFill = progressBar.createDiv({ cls: 'coffee-tracker-progress-fill' });
     progressFill.style.width = `${ratio * 100}%`;
     if (ratio < 0.2) progressFill.addClass('coffee-tracker-progress-low');
     progressContainer.createDiv({
       cls: 'coffee-tracker-progress-text',
-      text: `${bean.remaining}g / ${bean.totalWeight}g`,
+      text: `${formatDisplayNumber(bean.remaining, displayPrecision)}g / ${formatDisplayNumber(bean.totalWeight, displayPrecision)}g`,
     });
 
     const meta = info.createDiv({ cls: 'coffee-tracker-card-meta' });
     const ppg = getPricePerGram(bean);
-    meta.createSpan({ text: `¥${ppg.toFixed(2)}/g` });
-    meta.createSpan({ text: `评分: ${bean.rating}/10` });
+    meta.createSpan({ text: `¥${formatDisplayNumber(ppg, displayPrecision)}/g` });
+    meta.createSpan({ text: `评分: ${formatRatingDisplay(bean)}/10` });
 
     const actions = card.createDiv({ cls: 'coffee-tracker-card-actions' });
     this.renderPresetEditor(actions, bean);
@@ -84,8 +95,15 @@ export class KanbanRenderer {
     const historyBtn = bottomActions.createEl('button', { cls: 'coffee-tracker-btn-link', text: '历史' });
     historyBtn.addEventListener('click', () => {
       const { HistoryModal } = require('../modals/HistoryModal');
-      new HistoryModal(this.plugin.app, this.plugin, bean).open();
+      new HistoryModal(this.plugin.app, this.plugin, bean, () => this.onRefresh()).open();
     });
+
+    if (!bean.archived && bean.remaining > 0) {
+      const settleBtn = bottomActions.createEl('button', { cls: 'coffee-tracker-btn-link coffee-tracker-btn-settle', text: '平账归档' });
+      settleBtn.addEventListener('click', async () => {
+        await this.settleBean(bean);
+      });
+    }
   }
 
   private renderPresetEditor(container: HTMLElement, bean: CoffeeBean) {
@@ -131,7 +149,7 @@ export class KanbanRenderer {
 
     const renderActionLabel = () => {
       const draft = getDraftPreset();
-      actionBtn.textContent = `${draft.label} -${draft.amount}g`;
+      actionBtn.textContent = `${draft.label} -${formatDisplayNumber(draft.amount, this.getDisplayPrecision())}g`;
     };
 
     const persistPreset = async (force = false): Promise<DeductionPreset> => {
@@ -186,11 +204,29 @@ export class KanbanRenderer {
       const preset = await persistPreset(true);
       const success = await this.plugin.dataManager.deduct(bean.id, preset);
       if (success) {
-        new Notice(`${bean.name}: -${preset.amount}g`);
+        new Notice(`${bean.name}: -${formatDisplayNumber(preset.amount, this.getDisplayPrecision())}g`);
         this.onRefresh();
       } else {
         new Notice('余量不足！');
       }
     });
+  }
+
+  private getDisplayPrecision(): number {
+    return this.plugin.dataManager.data.settings.displayPrecision;
+  }
+
+  private async settleBean(bean: CoffeeBean): Promise<void> {
+    const remaining = bean.remaining;
+    const amountText = formatDisplayNumber(remaining, this.getDisplayPrecision());
+    if (!window.confirm(`确认将「${bean.name}」余量 ${amountText}g 平账为 0 并归档？`)) return;
+
+    const success = await this.plugin.dataManager.settleBean(bean.id);
+    if (success) {
+      new Notice(`${bean.name}: 已平账归档 ${amountText}g`);
+      this.onRefresh();
+    } else {
+      new Notice('平账归档失败');
+    }
   }
 }
