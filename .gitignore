@@ -2,3 +2,9 @@ node_modules/
 data.json
 .DS_Store
 *.log
+diagrams/
+
+# AI scaffolding (kept locally, not in git)
+.trellis/
+.agents/
+.codex/
